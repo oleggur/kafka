@@ -2,39 +2,52 @@ version: "3.8"                     # Compose file format
 
 services:
   kafka:
-    image: apache/kafka:4.0.0      # Use the official Apache Kafka stable release
-    container_name: kafka          # Container name (easy to reference in docker exec)
+    image: apache/kafka:4.0.0      # Stable Apache Kafka image (no ZooKeeper; uses KRaft)
+    container_name: kafka
     ports:
-      - "9092:9092"                # Expose broker listener to host (localhost:9092)
-
+      - "9092:9092"                # Expose host-facing client port (we'll connect from your laptop to localhost:9092)
     environment:
-      # --- Node identity & roles ---
-      KAFKA_NODE_ID: 1             # Unique ID for this Kafka node
-      KAFKA_PROCESS_ROLES: broker,controller   # Run both broker + controller in one process (single-node KRaft)
+      # --- Node identity & roles (KRaft single node) ---
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
 
-      # --- Controller quorum config ---
-      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER   # Name of the listener for controller traffic
-      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@localhost:9091 # Quorum voters = 1 node (id=1, port=9091)
+      # --- Controller quorum config (single-voter quorum for 1 node) ---
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@localhost:9091
 
-      # --- Network listeners ---
-      KAFKA_LISTENERS: CONTROLLER://0.0.0.0:9091,PLAINTEXT://0.0.0.0:9092
-        # Bind two listeners:
-        #  - CONTROLLER on port 9091 (internal metadata traffic)
-        #  - PLAINTEXT on port 9092 (client connections)
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
-        # Tell clients to connect via localhost:9092
+      # --- Listeners (define 3: controller, host, docker-internal) ---
+      # CONTROLLER: internal metadata traffic (not used by clients)
+      # HOST:       used by apps on your laptop (advertised as localhost:9092)
+      # DOCKER:     used by *other containers* on the same docker network (e.g., Schema Registry)
+      KAFKA_LISTENERS: CONTROLLER://0.0.0.0:9091,HOST://0.0.0.0:9092,DOCKER://0.0.0.0:9093
+      KAFKA_ADVERTISED_LISTENERS: HOST://localhost:9092,DOCKER://kafka:9093
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,HOST:PLAINTEXT,DOCKER:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: DOCKER
+
+      # --- Required in Kafka 4.x so controller knows what to advertise ---
       KAFKA_CONTROLLER_ADVERTISED_LISTENERS: CONTROLLER://localhost:9091
-        # Tell controller role its advertised endpoint (required on Kafka 4.x)
 
-      # --- Dev-friendly defaults ---
-      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"   # Auto-create topics when they’re first used
-      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: "1"   # Must be 1 in single-node setup
+      # --- Dev-friendly defaults (single node => replication factors = 1) ---
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"              # convenient for demos; disable in prod
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: "1"
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: "1"
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: "1"
-      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: "0"   # No wait before group rebalancing
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: "0"
 
-      # --- Storage ---
-      KAFKA_LOG_DIRS: /var/lib/kafka/data        # Where Kafka stores topic log data
-
+      # --- Storage path inside container (we mount it to ./data) ---
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
     volumes:
-      - ./data:/var/lib/kafka/data   # Persist Kafka logs to local ./data folder
+      - ./data:/var/lib/kafka/data
+
+  schema-registry:
+    image: confluentinc/cp-schema-registry:7.7.1  # Confluent's Schema Registry (works fine with Apache Kafka broker)
+    container_name: schema-registry
+    depends_on:
+      - kafka                                     # wait for kafka to start
+    ports:
+      - "8081:8081"                               # expose REST API on localhost:8081 (we'll point clients here)
+    environment:
+      # Tell Schema Registry how to reach Kafka (use the docker-internal listener we set up above)
+      SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: "PLAINTEXT://kafka:9093"
+      # Bind the Schema Registry HTTP API to all interfaces (and expose 8081 above)
+      SCHEMA_REGISTRY_LISTENERS: "http://0.0.0.0:8081"
