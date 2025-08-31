@@ -1,23 +1,39 @@
-version: "3.8"
+version: "3.8"                     # Compose file format version (3.8 works well for modern Docker)
+
 services:
-  kafka:
-    image: apache/kafka:latest
-    container_name: kafka
+  kafka:                           # Define a single service called "kafka"
+    image: apache/kafka:4.0.0      # Use the official Apache Kafka image (pin to a version, not latest)
+    container_name: kafka          # Give the container a fixed, friendly name
     ports:
-      - "9092:9092"
-      - "9093:9093"
+      - "9092:9092"                # Map broker listener port to localhost (clients use localhost:9092)
+      - "9093:9093"                # Map controller port (not usually needed externally, but useful for debug)
     environment:
-      KAFKA_NODE_ID: 1
-      KAFKA_PROCESS_ROLES: broker,controller
-      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@localhost:9093
-      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT
-      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
-      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
-      KAFKA_LOG_DIRS: /var/lib/kafka/data
-      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
-      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
-      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      # --- Node identity & roles ---
+      KAFKA_NODE_ID: 1             # Unique ID for this Kafka node
+      KAFKA_PROCESS_ROLES: broker,controller   # This single process plays both broker and controller roles
+
+      # --- Controller quorum (KRaft metadata management) ---
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER   # Use the CONTROLLER listener for metadata traffic
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@localhost:9093 # Quorum voters = 1 node, ID=1 at localhost:9093
+
+      # --- Network listeners ---
+      KAFKA_LISTENERS: |           # Define which sockets Kafka binds to
+        PLAINTEXT://0.0.0.0:9092,  # Accept client traffic on all interfaces, port 9092
+        CONTROLLER://0.0.0.0:9093  # Accept controller traffic on all interfaces, port 9093
+      KAFKA_ADVERTISED_LISTENERS: | # Tell clients how to reach Kafka
+        PLAINTEXT://localhost:9092 # Expose as "localhost:9092" so your host tools can connect
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: | # Map listener names to protocols
+        PLAINTEXT:PLAINTEXT,       # Client listener = plaintext
+        CONTROLLER:PLAINTEXT       # Controller listener = plaintext
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT # Brokers talk to each other via the PLAINTEXT listener (single node is fine)
+
+      # --- Storage ---
+      KAFKA_LOG_DIRS: /var/lib/kafka/data   # Where Kafka stores topic logs inside the container
+
+      # --- Developer-friendly configs ---
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true" # Auto-create topics when first used (good for learning; disable in prod)
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1 # Internal offsets topic replication (must be 1 in single node)
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0 # Start consumer group rebalances immediately
+
     volumes:
-      - ./data:/var/lib/kafka/data
+      - ./data:/var/lib/kafka/data # Mount local ./data folder to persist Kafka logs across restarts
