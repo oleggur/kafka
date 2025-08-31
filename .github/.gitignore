@@ -1,0 +1,14 @@
+# Kafka log data (local persistence)
+data/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Docker volumes
+kafka_data/
+
+# Editor / IDE
+.vscode/
+.idea/
