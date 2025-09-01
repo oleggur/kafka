@@ -47,7 +47,11 @@ services:
     ports:
       - "8081:8081"                               # expose REST API on localhost:8081 (we'll point clients here)
     environment:
+      # REQUIRED: explicit hostname for the service
+      SCHEMA_REGISTRY_HOST_NAME: "schema-registry"   # advertise this name; it’s the container name
+
       # Tell Schema Registry how to reach Kafka (use the docker-internal listener we set up above)
       SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: "PLAINTEXT://kafka:9093"
+
       # Bind the Schema Registry HTTP API to all interfaces (and expose 8081 above)
       SCHEMA_REGISTRY_LISTENERS: "http://0.0.0.0:8081"
