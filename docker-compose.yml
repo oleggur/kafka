@@ -53,3 +53,39 @@ services:
 
       # Bind the Schema Registry HTTP API to all interfaces (and expose 8081 above)
       SCHEMA_REGISTRY_LISTENERS: "http://0.0.0.0:8081"
+
+  clickhouse:
+    image: clickhouse/clickhouse-server:24.8   # pin version instead of 'latest' for repeatability
+    container_name: clickhouse
+    ports:
+      - "8123:8123"   # HTTP interface (REST/SQL via HTTP)
+      - "9000:9000"   # Native client (clickhouse-client, drivers)
+    # Persist data & logs on the host so container restarts don't wipe your DB
+    volumes:
+      - ./clickhouse_data:/var/lib/clickhouse
+      - ./clickhouse_logs:/var/log/clickhouse-server
+      # OPTIONAL: run SQL on first init (e.g., create DB/tables). Only executed on a fresh data dir.
+      - ./init_clickhouse.sql:/docker-entrypoint-initdb.d/init_clickhouse.sql:ro
+    environment:
+      - CLICKHOUSE_DB=demo            # or 'default' if you prefer
+      - CLICKHOUSE_USER=default
+      - CLICKHOUSE_PASSWORD=
+    # Give ClickHouse enough file descriptors for busy workloads
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+
+  # OPTIONAL: simple UI container that proxies to clickhouse HTTP
+  ch-ui:
+    image: ghcr.io/gnzsnz/clickhouse-ui:latest
+    container_name: ch-ui
+    ports:
+      - "8124:80"                     # open http://localhost:8124
+    environment:
+      - CLICKHOUSE_HOST=clickhouse    # resolves by service name on the compose network
+      - CLICKHOUSE_PORT=8123
+      - CLICKHOUSE_USER=default
+      - CLICKHOUSE_PASS=
+    depends_on:
+      - clickhouse
