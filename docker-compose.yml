@@ -64,6 +64,11 @@ services:
     volumes:
       - ch_data:/var/lib/clickhouse
       - ch_logs:/var/log/clickhouse-server
+    # using this config crashes my docker engine several seconds after running docker compose up
+    # volumes:
+    #   - ./clickhouse_data:/var/lib/clickhouse
+    #   - ./clickhouse_logs:/var/log/clickhouse-server
+
       # OPTIONAL: run SQL on first init (e.g., create DB/tables). Only executed on a fresh data dir.
       - ./init_clickhouse.sql:/docker-entrypoint-initdb.d/init_clickhouse.sql:ro
     environment:
@@ -76,6 +81,7 @@ services:
         soft: 262144
         hard: 262144
 
+# this is to allow using ch_data:/var/lib/clickhouse
 volumes:
   ch_data:
   ch_logs:
