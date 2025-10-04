@@ -81,7 +81,7 @@ services:
         soft: 262144
         hard: 262144
 
-# this is to allow using ch_data:/var/lib/clickhouse
+# optional, this is to explicitly define the volumns ch_data:/var/lib/clickhouse
 volumes:
   ch_data:
   ch_logs:
