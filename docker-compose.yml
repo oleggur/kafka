@@ -62,8 +62,8 @@ services:
       - "9000:9000"   # Native client (clickhouse-client, drivers)
     # Persist data & logs on the host so container restarts don't wipe your DB
     volumes:
-      - ./clickhouse_data:/var/lib/clickhouse
-      - ./clickhouse_logs:/var/log/clickhouse-server
+      - ch_data:/var/lib/clickhouse
+      - ch_logs:/var/log/clickhouse-server
       # OPTIONAL: run SQL on first init (e.g., create DB/tables). Only executed on a fresh data dir.
       - ./init_clickhouse.sql:/docker-entrypoint-initdb.d/init_clickhouse.sql:ro
     environment:
@@ -76,16 +76,6 @@ services:
         soft: 262144
         hard: 262144
 
-  # OPTIONAL: simple UI container that proxies to clickhouse HTTP
-  ch-ui:
-    image: ghcr.io/gnzsnz/clickhouse-ui:latest
-    container_name: ch-ui
-    ports:
-      - "8124:80"                     # open http://localhost:8124
-    environment:
-      - CLICKHOUSE_HOST=clickhouse    # resolves by service name on the compose network
-      - CLICKHOUSE_PORT=8123
-      - CLICKHOUSE_USER=default
-      - CLICKHOUSE_PASS=
-    depends_on:
-      - clickhouse
+volumes:
+  ch_data:
+  ch_logs:
