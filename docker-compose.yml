@@ -74,7 +74,7 @@ services:
     environment:
       - CLICKHOUSE_DB=demo            # or 'default' if you prefer
       - CLICKHOUSE_USER=default
-      - CLICKHOUSE_PASSWORD=
+      - CLICKHOUSE_PASSWORD=secret    # must set non empty password to connect via dbeaver
     # Give ClickHouse enough file descriptors for busy workloads
     ulimits:
       nofile:
