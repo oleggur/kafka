@@ -32,7 +32,6 @@ import time
 from typing import Dict, Any, Optional
 
 from confluent_kafka import Producer, KafkaError
-from confluent_kafka.admin import AdminClient, NewTopic
 
 
 def delivery_report(err: Optional[KafkaError], msg) -> None:
