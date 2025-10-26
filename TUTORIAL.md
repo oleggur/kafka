@@ -69,9 +69,7 @@ Install dependencies:
 
 ```bash
 pip install --upgrade pip
-pip install confluent-kafka==2.5.3
-pip install clickhouse-connect==0.7.0
-pip install fastavro==1.9.7
+pip install -r requirements.txt
 ```
 
 ### 4. Verify Setup
