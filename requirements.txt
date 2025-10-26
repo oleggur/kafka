@@ -1,0 +1,13 @@
+# Kafka Tutorial - Python Dependencies
+
+# Confluent Kafka Python client (librdkafka-based)
+# Supports producers, consumers, schema registry, Avro serialization
+confluent-kafka==2.5.3
+
+# ClickHouse Python client for database operations
+# Used to store and query Kafka messages
+clickhouse-connect==0.7.0
+
+# Fast Avro library (optional, useful for debugging Avro messages)
+# Provides tools for working with Avro schemas and data
+fastavro==1.9.7
