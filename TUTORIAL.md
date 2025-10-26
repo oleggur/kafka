@@ -77,7 +77,7 @@ pip install -r requirements.txt
 Check Kafka is accessible:
 
 ```bash
-docker exec -it kafka kafka-topics --bootstrap-server localhost:9092 --list
+docker exec kafka /opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list
 ```
 
 Check ClickHouse is accessible:
@@ -796,21 +796,21 @@ docker ps | grep kafka
 docker logs kafka
 
 # Verify Kafka is listening
-docker exec -it kafka kafka-broker-api-versions --bootstrap-server localhost:9092
+docker exec kafka /opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092
 ```
 
 **Problem**: Topic not auto-created
 
 ```bash
 # List topics
-docker exec -it kafka kafka-topics --bootstrap-server localhost:9092 --list
+docker exec kafka /opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list
 
 # Create topic manually
-docker exec -it kafka kafka-topics --bootstrap-server localhost:9092 \
+docker exec kafka /opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 \
   --create --topic my_topic --partitions 3 --replication-factor 1
 
 # Describe topic
-docker exec -it kafka kafka-topics --bootstrap-server localhost:9092 \
+docker exec kafka /opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 \
   --describe --topic my_topic
 ```
 
@@ -818,11 +818,11 @@ docker exec -it kafka kafka-topics --bootstrap-server localhost:9092 \
 
 ```bash
 # Check consumer group status
-docker exec -it kafka kafka-consumer-groups --bootstrap-server localhost:9092 \
+docker exec kafka /opt/kafka/bin/kafka-consumer-groups.sh --bootstrap-server localhost:9092 \
   --group my_group --describe
 
 # Reset consumer group (start from beginning)
-docker exec -it kafka kafka-consumer-groups --bootstrap-server localhost:9092 \
+docker exec kafka /opt/kafka/bin/kafka-consumer-groups.sh --bootstrap-server localhost:9092 \
   --group my_group --topic my_topic --reset-offsets --to-earliest --execute
 ```
 

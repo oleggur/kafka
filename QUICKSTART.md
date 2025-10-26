@@ -110,7 +110,7 @@ docker logs schema-registry
 docker logs clickhouse
 
 # List Kafka topics
-docker exec -it kafka kafka-topics --bootstrap-server localhost:9092 --list
+docker exec kafka /opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list
 
 # Access ClickHouse shell
 docker exec -it clickhouse clickhouse-client --password secret
