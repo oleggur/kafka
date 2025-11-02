@@ -34,6 +34,10 @@ from confluent_kafka.serialization import StringDeserializer
 from clickhouse_connect import get_client
 from clickhouse_connect.driver.client import Client
 
+# Note: DeserializingConsumer is marked "experimental" in the library docs,
+# but it's the recommended approach in Confluent's official documentation
+# and is widely used in production. It simplifies Avro deserialization.
+
 
 def main() -> None:
     """

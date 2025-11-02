@@ -51,6 +51,10 @@ from confluent_kafka.schema_registry import SchemaRegistryClient, Schema
 from confluent_kafka.schema_registry.avro import AvroSerializer
 from confluent_kafka.serialization import StringSerializer
 
+# Note: SerializingProducer is marked "experimental" in the library docs,
+# but it's the recommended approach in Confluent's official documentation
+# and is widely used in production. It simplifies Avro serialization.
+
 
 def delivery_report(err: Optional[KafkaError], msg) -> None:
     """Callback to confirm message delivery."""
