@@ -138,9 +138,15 @@ def main() -> None:
         )
 
         # POLL: Trigger delivery report callbacks
-        # producer.poll(0) processes any delivery callbacks that are ready
-        # The parameter is a timeout in seconds (0 = non-blocking check)
-        # This must be called periodically to ensure callbacks are invoked
+        # producer.poll(timeout) processes delivery callbacks from background threads
+        #
+        # timeout parameter (in seconds):
+        # - poll(0): Non-blocking - process ready callbacks and return immediately
+        # - poll(0.1): Block up to 0.1 seconds waiting for callbacks
+        # - poll(1): Block up to 1 second waiting for callbacks
+        #
+        # For async sending (like here), poll(0) is common - just trigger callbacks
+        # For blocking/sync behavior, use poll(timeout) after each produce()
         producer.poll(0)
 
         print(f"[SENT] Message #{seq}: {value}")
