@@ -203,11 +203,6 @@ def main() -> None:
                 f"seq={seq} campaign={campaign_id}"
             )
 
-            # Simulate processing time (in real app, this might be database write, API call, etc.)
-            time.sleep(0.01)
-
-            processing_time_ms: int = int((time.time() - start_time) * 1000)
-
             # ========================================================================
             # WRITE TO CLICKHOUSE
             # ========================================================================
@@ -224,7 +219,7 @@ def main() -> None:
                         spend,
                         currency,
                         idempotent,
-                        processing_time_ms
+                        int((time.time() - start_time) * 1000)
                     )],
                     column_names=[
                         "seq",
@@ -237,6 +232,12 @@ def main() -> None:
                 )
 
                 print(f"[CLICKHOUSE] Inserted seq={seq}")
+
+                # Simulate processing time AFTER the critical write
+                # If you kill during this sleep, the data is already in ClickHouse
+                # but offset is NOT committed yet, so message will be reprocessed (duplicate)
+                print(f"[PROCESSING] Processing message {message_count}... (Press Ctrl+C NOW to simulate crash)")
+                time.sleep(2)  # 2 seconds - gives you time to press Ctrl+C
 
             except Exception as e:
                 # ClickHouse write failed!
@@ -287,14 +288,12 @@ def main() -> None:
 
     except KeyboardInterrupt:
         print("-" * 60)
-        print(f"[STOP] Shutting down...")
+        print(f"[STOP] Crash simulated! NOT committing in-progress messages")
         print(f"  Messages processed: {message_count}")
         print(f"  Commits made: {commit_count}")
-
-        # Final commit before shutdown
-        if messages_since_commit > 0:
-            print(f"[COMMIT] Final commit of {messages_since_commit} messages")
-            consumer.commit(asynchronous=False)
+        print(f"  Uncommitted messages: {messages_since_commit}")
+        print()
+        print("[INFO] On restart, uncommitted messages will be reprocessed")
 
     finally:
         # Close consumer (triggers final commit if auto-commit was enabled)
@@ -318,6 +317,26 @@ def main() -> None:
         """)
         avg_processing_ms = result.result_rows[0][0]
         print(f"Average processing time: {avg_processing_ms:.2f} ms")
+
+        # Check for duplicates
+        print("\nChecking for duplicates:")
+        result = clickhouse_client.query("""
+            SELECT seq, COUNT(*) as count
+            FROM ads_reliability
+            GROUP BY seq
+            ORDER BY seq
+        """)
+        for row in result.result_rows:
+            seq, count = row
+            if count > 1:
+                print(f"  seq={seq}: {count} times (DUPLICATE!)")
+            else:
+                print(f"  seq={seq}: {count} time")
+
+        print("\nTo check data in ClickHouse:")
+        print("  docker exec -it clickhouse clickhouse-client --password secret")
+        print("  SELECT seq, COUNT(*) as count FROM demo.ads_reliability GROUP BY seq ORDER BY seq;")
+        print("  SELECT * FROM demo.ads_reliability ORDER BY seq;")
 
         # ========================================================================
         # COMMIT STRATEGIES SUMMARY
