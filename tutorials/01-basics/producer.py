@@ -147,6 +147,7 @@ def main() -> None:
         #
         # For async sending (like here), poll(0) is common - just trigger callbacks
         # For blocking/sync behavior, use poll(timeout) after each produce()
+        # Full sync: Use flush() after each message (very slow, not recommended)
         producer.poll(0)
 
         print(f"[SENT] Message #{seq}: {value}")
