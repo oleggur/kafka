@@ -112,16 +112,15 @@ All tutorials integrate with **ClickHouse** so you can query and analyze the dat
 
 ## Tutorial 01: Basics
 
-**Goal**: Understand core Kafka concepts - producers, consumers, topics, offsets.
+**Goal**: Send and receive your first Kafka messages.
 
 ### Concepts Covered
 
-- What is Kafka and why use it
-- Producers and consumers
-- Topics and partitions (basics)
-- Offsets and offset management
-- Consumer groups
-- ClickHouse integration
+- Kafka producers (sending messages)
+- Kafka consumers (receiving messages)
+- Topics (named message streams)
+- Offsets (message position in log)
+- ClickHouse integration (storing Kafka data)
 
 ### Scripts
 
@@ -177,6 +176,22 @@ python tutorials/01-basics/consumer_clickhouse.py
 ```
 
 Press `Ctrl+C` to stop.
+
+### What Just Happened?
+
+**Producer → Kafka → Consumer → ClickHouse:**
+
+1. **Producer** sent 10 messages to Kafka topic `ads_basic`
+2. **Kafka** stored messages in a durable log (survives restarts)
+3. **Consumer** read messages from Kafka
+4. **ClickHouse** stored messages for SQL queries
+
+**Key terms:**
+- **Topic**: A named stream of messages (like `ads_basic`)
+- **Offset**: Position of each message in the log (`offset=0`, `offset=1`, ...)
+- **Partition**: Topics are split into partitions for parallelism (more in Tutorial 03)
+
+That's it for the basics! Concepts like consumer groups, commits, and partitioning are covered in later tutorials.
 
 ### Verify in ClickHouse
 
@@ -424,6 +439,34 @@ Each consumer gets ONE partition (1:1 mapping with 3 partitions).
 
 **Experiment**: Kill one consumer (`Ctrl+C`) and watch partitions rebalance!
 
+### Consumer Groups Explained
+
+**What is a Consumer Group?**
+- Consumers with the same `group.id` form a **consumer group**
+- They work together to share partitions of a topic
+- Each partition is assigned to exactly ONE consumer in the group
+
+**Why Consumer Groups?**
+- **Parallel processing**: Multiple consumers = faster consumption
+- **Automatic load balancing**: Kafka distributes partitions evenly
+- **Fault tolerance**: If a consumer dies, its partitions reassign to others
+
+**Rebalancing:**
+- When a consumer joins/leaves, Kafka **rebalances** (redistributes partitions)
+- During rebalance, consumption pauses briefly
+- After rebalance, each consumer knows which partitions it owns
+
+**Example with 3 partitions:**
+- 1 consumer: gets all 3 partitions
+- 2 consumers: each gets 1-2 partitions
+- 3 consumers: each gets 1 partition (optimal)
+- 4+ consumers: some are idle (more consumers than partitions)
+
+**Independent Groups:**
+- Different `group.id` = different consumer groups
+- Each group reads independently (own offsets, own progress)
+- Example: One group for ClickHouse sink, another for alerting
+
 ### Verify in ClickHouse
 
 ```sql
@@ -526,6 +569,24 @@ python tutorials/04-reliability/consumer_manual_commit_clickhouse.py
 [CLICKHOUSE] Inserted seq=0
 [COMMIT] Committed offset 1 (per-message)
 ```
+
+### Offset Commits Explained
+
+**What is an Offset Commit?**
+- A commit saves your current read position (offset) to Kafka
+- Kafka stores commits in a special topic `__consumer_offsets`
+- On restart, the consumer resumes from the last committed offset
+- Commits are tracked per consumer group + partition
+
+**Auto-commit (Tutorial 01):**
+- Enabled by default (`enable.auto.commit=true`)
+- Kafka automatically commits every 5 seconds
+- Simple but risky - can lose data (see below)
+
+**Manual commit (Tutorial 04):**
+- You control when to commit (`enable.auto.commit=false`)
+- Commit AFTER processing succeeds
+- More code, but safer
 
 ### Why Manual Commit Matters
 
