@@ -4,6 +4,9 @@
 # Supports producers, consumers, schema registry, Avro serialization
 confluent-kafka==2.5.3
 
+# HTTP library required by confluent-kafka for Schema Registry
+requests==2.31.0
+
 # ClickHouse Python client for database operations
 # Used to store and query Kafka messages
 clickhouse-connect==0.7.0
