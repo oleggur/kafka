@@ -511,6 +511,40 @@ ORDER BY campaign_id, partition_id;
 - Manual offset commit
 - At-least-once vs at-most-once
 
+### Offset Commits Explained
+
+**What is an Offset Commit?**
+- A commit saves your current read position (offset) to Kafka
+- Kafka stores commits in a special topic `__consumer_offsets`
+- On restart, the consumer resumes from the last committed offset
+- Commits are tracked per consumer group + partition
+
+**Auto-commit (Tutorial 01):**
+- Enabled by default (`enable.auto.commit=true`)
+- Kafka automatically commits every 5 seconds
+- Simple but risky - can lose data (see below)
+
+**Manual commit (Tutorial 04):**
+- You control when to commit (`enable.auto.commit=false`)
+- Commit AFTER processing succeeds
+- More code, but safer
+
+### Why Manual Commit Matters
+
+**Auto-commit scenario (BAD)**:
+1. Consumer polls messages 1-100
+2. Auto-commit commits offset 100 every 5 seconds
+3. Consumer crashes at message 50
+4. **Messages 51-100 are LOST!**
+
+**Manual commit scenario (GOOD)**:
+1. Consumer processes message 1
+2. Consumer writes to ClickHouse
+3. Consumer commits offset 1
+4. Consumer crashes
+5. On restart, resumes at message 2
+6. **No data loss!** (might reprocess message 1 if crashed before commit)
+
 ### Scripts
 
 #### 4.1 Idempotent Producer
@@ -569,40 +603,6 @@ python tutorials/04-reliability/consumer_manual_commit_clickhouse.py
 [CLICKHOUSE] Inserted seq=0
 [COMMIT] Committed offset 1 (per-message)
 ```
-
-### Offset Commits Explained
-
-**What is an Offset Commit?**
-- A commit saves your current read position (offset) to Kafka
-- Kafka stores commits in a special topic `__consumer_offsets`
-- On restart, the consumer resumes from the last committed offset
-- Commits are tracked per consumer group + partition
-
-**Auto-commit (Tutorial 01):**
-- Enabled by default (`enable.auto.commit=true`)
-- Kafka automatically commits every 5 seconds
-- Simple but risky - can lose data (see below)
-
-**Manual commit (Tutorial 04):**
-- You control when to commit (`enable.auto.commit=false`)
-- Commit AFTER processing succeeds
-- More code, but safer
-
-### Why Manual Commit Matters
-
-**Auto-commit scenario (BAD)**:
-1. Consumer polls messages 1-100
-2. Auto-commit commits offset 100 every 5 seconds
-3. Consumer crashes at message 50
-4. **Messages 51-100 are LOST!**
-
-**Manual commit scenario (GOOD)**:
-1. Consumer processes message 1
-2. Consumer writes to ClickHouse
-3. Consumer commits offset 1
-4. Consumer crashes
-5. On restart, resumes at message 2
-6. **No data loss!** (might reprocess message 1 if crashed before commit)
 
 ### Exercise
 
