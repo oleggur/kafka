@@ -308,12 +308,32 @@ python tutorials/02-serialization/consumer_avro_clickhouse.py
 | **Evolution** | Flexible but risky | Managed with compatibility checks |
 | **Use When** | Debugging, rapid prototyping | Production, high throughput |
 
+### Compare Serialized Message Sizes
+
+To see the actual serialized message sizes (what's sent over the wire in Kafka):
+
+```bash
+# Check JSON topic size
+docker exec kafka /opt/kafka/bin/kafka-log-dirs.sh --bootstrap-server localhost:9092 \
+  --topic-list ads_json --describe | grep -A5 ads_json
+
+# Check Avro topic size
+docker exec kafka /opt/kafka/bin/kafka-log-dirs.sh --bootstrap-server localhost:9092 \
+  --topic-list ads_avro --describe | grep -A5 ads_avro
+```
+
+**Expected result**: Avro messages are typically 30-50% smaller than equivalent JSON messages because:
+- Binary encoding (no field names repeated in each message)
+- Compact number representation
+- Schema stored separately (not in each message)
+
 ### Exercise
 
-1. Run JSON producer - notice it accepts invalid data
-2. Run Avro producer - notice it rejects invalid data
-3. Compare message sizes (Avro is smaller)
-4. Query both tables in ClickHouse and compare
+1. Run JSON producer - notice it accepts invalid data (missing fields, wrong types)
+2. Run Avro producer - notice it rejects invalid data at serialization time
+3. Run both consumers to store data in ClickHouse
+4. Compare Kafka topic sizes (see commands above) - Avro is more compact
+5. Query both tables in ClickHouse to see the data
 
 ---
 
