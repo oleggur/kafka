@@ -67,6 +67,7 @@ With Transactions:
 Result: Either all succeed or all fail (atomic)
 """
 
+import time
 import json
 import random
 from typing import Dict, Any
@@ -168,6 +169,7 @@ def main() -> None:
             # Must call poll() to handle delivery callbacks
             producer.poll(0)
             print(f"[TXN] Produced seq={seq} (buffered)")
+            time.sleep(4)
 
         # COMMIT TRANSACTION
         # Kafka Concept - ATOMIC COMMIT:
@@ -221,6 +223,9 @@ def main() -> None:
 
             producer.poll(0)
             print(f"[TXN] Produced seq={seq} (buffered)")
+
+            print("Run \n python tutorials/05-transactions/consumer_read_committed_clickhouse.py \n now to see uncommitted messages - seq 10,11,12")
+            time.sleep(4)
 
         # Simulate error during processing
         print("[ERROR] Simulating processing error...")
@@ -278,6 +283,7 @@ def main() -> None:
             )
 
             print(f"[TXN] Produced to {topic_output}: seq={seq} spend={spend}")
+            time.sleep(4)
 
         # Write summary to another topic
         summary: Dict[str, Any] = {
@@ -304,6 +310,7 @@ def main() -> None:
         print("[TXN] Transaction committed!")
         print(f"[TXN] Messages in {topic_output} and {topic_summary} are atomically visible")
         print()
+
 
     except Exception as e:
         print(f"[TXN ERROR] {e}")
