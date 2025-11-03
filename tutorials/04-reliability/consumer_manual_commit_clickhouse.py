@@ -1,13 +1,18 @@
 #!/usr/bin/env python3
 """
-Tutorial 04-B: Manual Offset Commit for Reliability
-===================================================
+Tutorial 04-B: Auto-Commit vs Manual Commit Comparison
+=======================================================
 
 This script demonstrates:
-- Manual offset management for at-least-once semantics
-- Auto-commit pitfalls and data loss scenarios
+- Auto-commit mode (at-most-once) - risk of data LOSS
+- Manual commit mode (at-least-once) - risk of DUPLICATES but no loss
 - Commit strategies (per message, per batch, periodic)
 - Error handling and retry logic
+
+Usage:
+------
+python consumer_manual_commit_clickhouse.py auto      # Auto-commit (data loss risk)
+python consumer_manual_commit_clickhouse.py manual    # Manual commit (default, safe)
 
 Key Concepts:
 -------------
@@ -54,6 +59,7 @@ Manual Commit Solution:
 """
 
 import json
+import sys
 import time
 from typing import Dict, Any, Optional
 
@@ -64,8 +70,23 @@ from clickhouse_connect.driver.client import Client
 
 def main() -> None:
     """
-    Demonstrate manual offset management for reliable processing.
+    Demonstrate auto-commit vs manual commit offset management.
     """
+
+    # ============================================================================
+    # PARSE COMMAND LINE ARGUMENTS
+    # ============================================================================
+
+    commit_mode = "manual"  # default
+    if len(sys.argv) > 1:
+        commit_mode = sys.argv[1].lower()
+        if commit_mode not in ["auto", "manual"]:
+            print("Usage: python consumer_manual_commit_clickhouse.py [auto|manual]")
+            print("  auto   - Enable auto-commit (demonstrates data loss)")
+            print("  manual - Disable auto-commit (demonstrates duplicates but no loss)")
+            sys.exit(1)
+
+    use_auto_commit = (commit_mode == "auto")
 
     # ============================================================================
     # CONSUMER CONFIGURATION
@@ -73,15 +94,20 @@ def main() -> None:
 
     consumer_config: Dict[str, Any] = {
         "bootstrap.servers": "localhost:9092",
-        "group.id": "reliability_manual_commit",
+        "group.id": f"reliability_{commit_mode}_commit",
         "auto.offset.reset": "earliest",
 
-        # DISABLE AUTO-COMMIT
-        # Kafka Concept - MANUAL COMMIT:
-        #   We take full control of when offsets are committed
-        #   This allows us to commit AFTER successful processing
-        #   Ensures at-least-once semantics (no data loss)
-        "enable.auto.commit": False,
+        # AUTO-COMMIT vs MANUAL COMMIT
+        # Kafka Concept:
+        #   AUTO-COMMIT (enable.auto.commit=True):
+        #     - Kafka commits offsets every N seconds (default 5s)
+        #     - Commits based on what was FETCHED, not PROCESSED
+        #     - Risk: Data loss if crash before processing
+        #   MANUAL COMMIT (enable.auto.commit=False):
+        #     - You control when to commit
+        #     - Commit AFTER successful processing
+        #     - Risk: Duplicates if crash before commit, but NO DATA LOSS
+        "enable.auto.commit": use_auto_commit,
 
         # SESSION.TIMEOUT: How long before consumer is considered dead
         # If we take too long to process, Kafka may think we crashed
@@ -99,11 +125,17 @@ def main() -> None:
     consumer.subscribe([topic])
 
     print("=" * 60)
-    print("MANUAL OFFSET COMMIT TUTORIAL")
+    if use_auto_commit:
+        print("AUTO-COMMIT MODE (AT-MOST-ONCE - DATA LOSS RISK!)")
+    else:
+        print("MANUAL COMMIT MODE (AT-LEAST-ONCE - NO DATA LOSS)")
     print("=" * 60)
     print(f"Topic: {topic}")
     print(f"Group: {consumer_config['group.id']}")
-    print(f"Auto-commit: DISABLED (manual control)")
+    print(f"Auto-commit: {'ENABLED' if use_auto_commit else 'DISABLED'}")
+    if use_auto_commit:
+        print(f"Auto-commit interval: {consumer_config.get('auto.commit.interval.ms', 5000)}ms")
+        print("⚠️  WARNING: Auto-commit can cause DATA LOSS on crash!")
     print("-" * 60)
     print()
 
@@ -136,22 +168,20 @@ def main() -> None:
     print()
 
     # ============================================================================
-    # CONSUME WITH MANUAL COMMIT
+    # CONSUME WITH AUTO OR MANUAL COMMIT
     # ============================================================================
 
     message_count: int = 0
     commit_count: int = 0
-
-    # COMMIT STRATEGY: We'll demonstrate different strategies
-    COMMIT_STRATEGY = "per_message"  # Options: per_message, per_batch, periodic
-
-    batch_size: int = 10
     messages_since_commit: int = 0
-    last_commit_time: float = time.time()
-    commit_interval_seconds: float = 5.0
+
+    # Track auto-commit timing
+    auto_commit_warning_shown: bool = False
+    consumer_start_time: float = time.time()
 
     try:
-        print(f"[STRATEGY] Commit strategy: {COMMIT_STRATEGY}")
+        if use_auto_commit:
+            print("[INFO] Press Ctrl+C anytime to simulate crash")
         print()
 
         while True:
@@ -159,14 +189,6 @@ def main() -> None:
             msg: Optional[Message] = consumer.poll(timeout=1.0)
 
             if msg is None:
-                # No message - maybe check if we should commit (for periodic strategy)
-                if COMMIT_STRATEGY == "periodic":
-                    if time.time() - last_commit_time >= commit_interval_seconds and messages_since_commit > 0:
-                        consumer.commit(asynchronous=False)
-                        commit_count += 1
-                        print(f"[COMMIT] Periodic commit ({messages_since_commit} messages)")
-                        messages_since_commit = 0
-                        last_commit_time = time.time()
                 continue
 
             if msg.error():
@@ -203,6 +225,22 @@ def main() -> None:
                 f"seq={seq} campaign={campaign_id}"
             )
 
+            # Simulate SLOW processing BEFORE database write
+            # This is KEY to demonstrating the difference:
+            # - AUTO-COMMIT: May commit while we're sleeping (before insert) → DATA LOSS on crash
+            # - MANUAL COMMIT: Won't commit until after insert → NO DATA LOSS on crash
+
+            # Show warning if auto-commit interval has passed
+            if use_auto_commit and not auto_commit_warning_shown:
+                elapsed = time.time() - consumer_start_time
+                if elapsed >= 5.0:  # Auto-commit interval
+                    print("⚠️  [AUTO-COMMIT] 5 seconds elapsed - Kafka has committed offsets in background!")
+                    print("⚠️  [AUTO-COMMIT] If you press Ctrl+C now, unprocessed messages will be LOST!")
+                    auto_commit_warning_shown = True
+
+            print(f"[PROCESSING] Processing message {message_count}...")
+            time.sleep(2)  # 2 seconds of "processing" before writing to database
+
             # ========================================================================
             # WRITE TO CLICKHOUSE
             # ========================================================================
@@ -233,12 +271,6 @@ def main() -> None:
 
                 print(f"[CLICKHOUSE] Inserted seq={seq}")
 
-                # Simulate processing time AFTER the critical write
-                # If you kill during this sleep, the data is already in ClickHouse
-                # but offset is NOT committed yet, so message will be reprocessed (duplicate)
-                print(f"[PROCESSING] Processing message {message_count}... (Press Ctrl+C NOW to simulate crash)")
-                time.sleep(2)  # 2 seconds - gives you time to press Ctrl+C
-
             except Exception as e:
                 # ClickHouse write failed!
                 # DON'T commit offset - we'll retry this message after restart
@@ -260,40 +292,32 @@ def main() -> None:
 
             messages_since_commit += 1
 
-            if COMMIT_STRATEGY == "per_message":
-                # STRATEGY 1: Commit after every message
-                # Pros: Minimal reprocessing on crash (at most 1 message)
-                # Cons: High commit overhead (slow for high throughput)
-
+            # Only do manual commits if auto-commit is disabled
+            if not use_auto_commit:
+                # Manual commit after each message
                 consumer.commit(asynchronous=False)
                 commit_count += 1
-                print(f"[COMMIT] Committed offset {offset + 1} (per-message)")
-
-            elif COMMIT_STRATEGY == "per_batch" and messages_since_commit >= batch_size:
-                # STRATEGY 2: Commit after every N messages
-                # Pros: Lower commit overhead (faster)
-                # Cons: May reprocess up to N messages on crash
-
-                consumer.commit(asynchronous=False)
-                commit_count += 1
-                print(f"[COMMIT] Committed batch of {messages_since_commit} messages")
-                messages_since_commit = 0
-
-            elif COMMIT_STRATEGY == "periodic":
-                # STRATEGY 3: Commit every T seconds
-                # Handled in the msg is None block above
-                pass
+                print(f"[COMMIT] Committed offset {offset + 1}")
+            else:
+                # Auto-commit mode: Kafka commits in background automatically
+                print(f"[AUTO-COMMIT] Offset {offset} will be committed automatically in background")
 
             print()
 
     except KeyboardInterrupt:
         print("-" * 60)
-        print(f"[STOP] Crash simulated! NOT committing in-progress messages")
+        print(f"[STOP] Crash simulated!")
         print(f"  Messages processed: {message_count}")
-        print(f"  Commits made: {commit_count}")
-        print(f"  Uncommitted messages: {messages_since_commit}")
-        print()
-        print("[INFO] On restart, uncommitted messages will be reprocessed")
+        if use_auto_commit:
+            print(f"  Commits: AUTO (Kafka committed in background every 5s)")
+            print()
+            print("[WARNING] Auto-commit may have already committed offsets for unfetched messages!")
+            print("[WARNING] On restart, you may see MISSING messages (data loss)")
+        else:
+            print(f"  Manual commits made: {commit_count}")
+            print(f"  Uncommitted messages: {messages_since_commit}")
+            print()
+            print("[INFO] On restart, uncommitted messages will be reprocessed (no data loss)")
 
     finally:
         # Close consumer (triggers final commit if auto-commit was enabled)
@@ -338,36 +362,6 @@ def main() -> None:
         print("  SELECT seq, COUNT(*) as count FROM demo.ads_reliability GROUP BY seq ORDER BY seq;")
         print("  SELECT * FROM demo.ads_reliability ORDER BY seq;")
 
-        # ========================================================================
-        # COMMIT STRATEGIES SUMMARY
-        # ========================================================================
-        print("\n" + "=" * 60)
-        print("COMMIT STRATEGIES COMPARISON")
-        print("=" * 60)
-        print("""
-1. PER-MESSAGE COMMIT:
-   - Commit after each message
-   - Lowest reprocessing risk (max 1 message duplicated)
-   - Highest commit overhead (can be slow)
-   - Use for: Low throughput, critical data
-
-2. PER-BATCH COMMIT:
-   - Commit after N messages
-   - Moderate reprocessing risk (max N messages duplicated)
-   - Lower commit overhead (faster)
-   - Use for: High throughput, can tolerate some duplicates
-
-3. PERIODIC COMMIT:
-   - Commit every T seconds
-   - Variable reprocessing risk (depends on throughput)
-   - Lowest commit overhead
-   - Use for: Very high throughput, idempotent processing
-
-RECOMMENDATION: Use per-batch with small batch size (10-100)
-  - Good balance of performance and reliability
-  - Combined with idempotent producer (no duplicates on send)
-  - Handle duplicates in consumer (deduplication in ClickHouse)
-        """)
 
 
 if __name__ == "__main__":

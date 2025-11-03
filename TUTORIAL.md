@@ -577,40 +577,139 @@ acks=1: Leader acknowledgment only
 acks=all: All in-sync replicas acknowledge
 ```
 
-#### 4.2 Manual Commit Consumer with ClickHouse
+#### 4.2 Auto-Commit vs Manual Commit Consumer
 
 **File**: [tutorials/04-reliability/consumer_manual_commit_clickhouse.py](tutorials/04-reliability/consumer_manual_commit_clickhouse.py)
 
 **What it does**:
-- Disables auto-commit
-- Commits offset AFTER ClickHouse write
-- Demonstrates 3 commit strategies:
-  - Per-message (safest, slowest)
-  - Per-batch (balanced)
-  - Periodic (fastest, riskiest)
-- Handles errors gracefully
+- Supports two modes: `auto` (auto-commit) and `manual` (manual commit)
+- Auto-commit mode: Demonstrates data LOSS risk (at-most-once)
+- Manual commit mode: Demonstrates NO data loss (at-least-once)
+- Slow processing (2 seconds per message) to make the problem visible
 
 **Run**:
 
 ```bash
-python tutorials/04-reliability/consumer_manual_commit_clickhouse.py
+# Auto-commit mode (demonstrates data loss)
+python tutorials/04-reliability/consumer_manual_commit_clickhouse.py auto
+
+# Manual commit mode (safe - no data loss)
+python tutorials/04-reliability/consumer_manual_commit_clickhouse.py manual
 ```
 
-**Expected output**:
-```
-[STRATEGY] Commit strategy: per_message
-[RECV #1] partition=0 offset=0 | seq=0
-[CLICKHOUSE] Inserted seq=0
-[COMMIT] Committed offset 1 (per-message)
+### Exercise: Auto-Commit vs Manual Commit Comparison
+
+**Goal**: See side-by-side how manual commit AFTER insert prevents data loss
+
+#### Setup (Do Once)
+
+Clear the topic and ClickHouse table:
+```bash
+docker exec kafka /opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --delete --topic ads_reliability_idem
+docker exec -it clickhouse clickhouse-client --password secret --query "TRUNCATE TABLE demo.ads_reliability"
 ```
 
-### Exercise
+Produce 10 messages:
+```bash
+python tutorials/04-reliability/producer_idempotent.py
+```
 
-1. Run idempotent producer to send messages
-2. Run manual commit consumer
-3. Kill consumer (Ctrl+C) while it's processing
-4. Restart consumer - notice it resumes from last commit
-5. Verify in ClickHouse that no messages were lost
+---
+
+#### Part 1: Auto-Commit (DATA LOSS)
+
+1. Run consumer in **auto-commit mode**:
+   ```bash
+   python tutorials/04-reliability/consumer_manual_commit_clickhouse.py auto
+   ```
+
+2. Watch the output - you'll see:
+   - Messages being received and processed slowly (2 seconds each)
+   - "AUTO-COMMIT" messages indicating offset committed in background
+
+3. **After processing 2-3 messages, press Ctrl+C** to simulate crash
+
+4. Check what was actually saved to ClickHouse:
+   ```bash
+   docker exec -it clickhouse clickhouse-client --password secret
+   ```
+   ```sql
+   SELECT seq FROM demo.ads_reliability ORDER BY seq;
+   ```
+
+   Example: You'll see only `0, 1, 2` (3 messages saved)
+
+5. Restart the consumer:
+   ```bash
+   python tutorials/04-reliability/consumer_manual_commit_clickhouse.py auto
+   ```
+
+6. **Notice: It resumes from a LATER offset** (auto-commit already committed offsets in background)
+   - It skips messages that were fetched but not processed
+   - Check ClickHouse again - **MISSING MESSAGES** (e.g., seq 3-9 are gone forever!)
+
+**Result**: ❌ **DATA LOSS** - Auto-commit committed offsets before processing completed
+
+---
+
+#### Part 2: Manual Commit (NO DATA LOSS)
+
+1. Clean up and restart:
+   ```bash
+   docker exec kafka /opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --delete --topic ads_reliability_idem
+   docker exec -it clickhouse clickhouse-client --password secret --query "TRUNCATE TABLE demo.ads_reliability"
+   python tutorials/04-reliability/producer_idempotent.py  # Produce 10 messages again
+   ```
+
+2. Run consumer in **manual commit mode**:
+   ```bash
+   python tutorials/04-reliability/consumer_manual_commit_clickhouse.py manual
+   ```
+
+3. Watch the output - you'll see:
+   - Messages being processed slowly (2 seconds each)
+   - "[COMMIT] Committed offset X" AFTER each insert
+   - Commit happens AFTER ClickHouse write, not before!
+
+4. **After processing 2-3 messages, press Ctrl+C** during the "[PROCESSING]..." message
+
+5. Check what was saved:
+   ```bash
+   docker exec -it clickhouse clickhouse-client --password secret
+   ```
+   ```sql
+   SELECT seq FROM demo.ads_reliability ORDER BY seq;
+   ```
+
+6. Restart the consumer:
+   ```bash
+   python tutorials/04-reliability/consumer_manual_commit_clickhouse.py manual
+   ```
+
+7. **Notice: It resumes from the LAST COMMITTED offset**
+   - It reprocesses the message you were processing when it crashed
+   - All messages eventually get processed (no data loss!)
+
+8. Check ClickHouse - **ALL 10 MESSAGES** are present:
+   ```sql
+   SELECT seq, COUNT(*) as count
+   FROM demo.ads_reliability
+   GROUP BY seq
+   ORDER BY seq;
+   ```
+
+**Result**: ✅ **NO DATA LOSS** - Manual commit after insert ensures all messages are processed
+
+---
+
+### Key Takeaway
+
+| Mode | Data Loss? | Why? |
+|------|-----------|------|
+| **Auto-commit** | ❌ YES | Commits offsets periodically in background, BEFORE processing completes. Crash → unprocessed messages skipped. |
+| **Manual commit AFTER insert** | ✅ NO | Commits only AFTER successful processing. Crash → message reprocessed on restart. |
+
+**Recommendation**: Always use manual commit AFTER critical operations (database writes, API calls) to prevent data loss!
 
 ---
 

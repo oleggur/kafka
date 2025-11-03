@@ -100,8 +100,8 @@ def demo_non_idempotent() -> None:
     print(f"[CONFIG] Retries: {producer_config['retries']}")
     print()
 
-    # Send a few messages
-    for seq in range(3):
+    # Send 10 messages (enough to demonstrate auto-commit data loss)
+    for seq in range(10):
         event: Dict[str, Any] = {
             "seq": seq,
             "campaign_id": f"campaign_{seq}",
@@ -169,8 +169,8 @@ def demo_idempotent() -> None:
     print("[CONFIG] Retries: 3")
     print()
 
-    # Send a few messages
-    for seq in range(3):
+    # Send 10 messages (enough to demonstrate auto-commit data loss)
+    for seq in range(10):
         event: Dict[str, Any] = {
             "seq": seq,
             "campaign_id": f"campaign_{seq}",
