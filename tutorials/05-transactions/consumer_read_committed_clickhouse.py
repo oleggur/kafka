@@ -97,7 +97,7 @@ def demo_read_uncommitted() -> None:
 
     try:
         # Poll for 5 seconds
-        start_time = import_time = __import__('time').time()
+        start_time = __import__('time').time()
         timeout: float = 5.0
 
         while __import__('time').time() - start_time < timeout:
