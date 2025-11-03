@@ -69,10 +69,9 @@ Result: Either all succeed or all fail (atomic)
 
 import json
 import random
-import time
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 
-from confluent_kafka import Producer, KafkaError, KafkaException
+from confluent_kafka import Producer, KafkaException
 
 
 def main() -> None:
