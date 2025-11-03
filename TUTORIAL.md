@@ -813,6 +813,8 @@ DEMO 3: Multi-Topic Atomic Write
 - Shows exactly-once processing
 - Stores in ClickHouse with manual commit
 
+**Important Note**: The `read_uncommitted` consumer will only see messages from **ongoing (not yet committed/aborted) transactions**. Once a transaction is aborted, even `read_uncommitted` consumers won't see those messages. To observe the difference between isolation levels, you would need the producer to keep a transaction open while the consumer is reading.
+
 **Run**:
 
 ```bash
