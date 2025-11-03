@@ -212,6 +212,18 @@ FROM demo.ads_basic
 GROUP BY campaign_id;
 ```
 
+### Cleanup (Tutorial 01)
+
+Before starting, clean up any previous data:
+
+```bash
+# Delete Kafka topic
+docker exec kafka /opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --delete --topic ads_basic
+
+# Clear ClickHouse table
+docker exec -it clickhouse clickhouse-client --password secret --query "TRUNCATE TABLE demo.ads_basic"
+```
+
 ### Exercise
 
 1. Run producer to send 10 messages
@@ -341,6 +353,20 @@ docker exec kafka /opt/kafka/bin/kafka-log-dirs.sh --bootstrap-server localhost:
 - Binary encoding (no field names repeated in each message)
 - Compact number representation
 - Schema stored separately (not in each message)
+
+### Cleanup (Tutorial 02)
+
+Before starting, clean up any previous data:
+
+```bash
+# Delete Kafka topics
+docker exec kafka /opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --delete --topic ads_json
+docker exec kafka /opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --delete --topic ads_avro
+
+# Clear ClickHouse tables
+docker exec -it clickhouse clickhouse-client --password secret --query "TRUNCATE TABLE demo.ads_json"
+docker exec -it clickhouse clickhouse-client --password secret --query "TRUNCATE TABLE demo.ads_avro"
+```
 
 ### Exercise
 
@@ -487,6 +513,18 @@ GROUP BY campaign_id, partition_id
 ORDER BY campaign_id, partition_id;
 ```
 
+### Cleanup (Tutorial 03)
+
+Before starting, clean up any previous data:
+
+```bash
+# Delete Kafka topic
+docker exec kafka /opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --delete --topic ads_partitioned
+
+# Clear ClickHouse table
+docker exec -it clickhouse clickhouse-client --password secret --query "TRUNCATE TABLE demo.ads_partitioned"
+```
+
 ### Exercise
 
 1. Run producer to create partitioned topic
@@ -597,17 +635,22 @@ python tutorials/04-reliability/consumer_manual_commit_clickhouse.py auto
 python tutorials/04-reliability/consumer_manual_commit_clickhouse.py manual
 ```
 
+### Cleanup (Tutorial 04)
+
+Before starting, clean up any previous data:
+
+```bash
+# Delete Kafka topics
+docker exec kafka /opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --delete --topic ads_reliability_nonidem
+docker exec kafka /opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --delete --topic ads_reliability_idem
+
+# Clear ClickHouse table
+docker exec -it clickhouse clickhouse-client --password secret --query "TRUNCATE TABLE demo.ads_reliability"
+```
+
 ### Exercise: Auto-Commit vs Manual Commit Comparison
 
 **Goal**: See side-by-side how manual commit AFTER insert prevents data loss
-
-#### Setup (Do Once)
-
-Clear the topic and ClickHouse table:
-```bash
-docker exec kafka /opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --delete --topic ads_reliability_idem
-docker exec -it clickhouse clickhouse-client --password secret --query "TRUNCATE TABLE demo.ads_reliability"
-```
 
 Produce 10 messages:
 ```bash
@@ -811,6 +854,20 @@ consumer.commit()  # Commit offset
 ```
 
 **Result**: Each message processed exactly once, even with failures!
+
+### Cleanup (Tutorial 05)
+
+Before starting, clean up any previous data:
+
+```bash
+# Delete Kafka topics
+docker exec kafka /opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --delete --topic ads_transactions
+docker exec kafka /opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --delete --topic ads_transactions_output
+docker exec kafka /opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --delete --topic ads_transactions_summary
+
+# Clear ClickHouse table
+docker exec -it clickhouse clickhouse-client --password secret --query "TRUNCATE TABLE demo.ads_transactions"
+```
 
 ### Exercise
 
